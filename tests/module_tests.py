@@ -2,36 +2,30 @@ import unittest
 
 from simplenet import modules
 import torch
+import torch.nn.functional as F
 from torch.autograd.variable import Variable
+
 
 class ModulesTest(unittest.TestCase):
 
-    class Sum(modules.Module):
-        def __init__(self):
-            super(ModulesTest.Sum, self).__init__()
-
-        def forward(self, input):
-            self.activations = input
-            return torch.tensor([input.sum()])
-
-        def backward(self, gradwrtoutput):
-            return gradwrtoutput * torch.ones(gradwrtoutput.shape)
-
-        def _tensor_equal(self, x, y, msg):
-            if not torch.equal(x, y):
-                m = "x!=y" if msg is None else msg
-                raise self.failureException(msg)
-
     def setUp(self):
         n = 4
-        self.input_dims = (3)
+        self.input_dims = 3
         self.input = torch.randn(n, self.input_dims)
+        self.gradwrtout = torch.randn(n, self.input_dims)
 
         self.addTypeEqualityFunc(torch.FloatTensor, self._tensor_equal)
 
+
+    def torch_eval_f_backward(self, f, gradwrtout):
+        tin = Variable(self.input, requires_grad=True)
+        tout = f(tin)
+        tout.backward(self.gradwrtout)
+        grad = tin.grad.data.sum(0)
+        return grad
+
     def test_relu_forward(self):
-        tmodel = torch.nn.ReLU()
-        tout = tmodel.forward(self.input)
+        tout = F.relu(self.input)
 
         model = modules.ReLU()
         out = model.forward(self.input)
@@ -39,17 +33,10 @@ class ModulesTest(unittest.TestCase):
         assert(torch.equal(out, tout.data))
 
     def test_relu_backward(self):
-        input = Variable(self.input, requires_grad=True)
-        tmodel = torch.nn.ReLU()
-        tout = tmodel.forward(input)
-        tout = tout.sum()
-        tgrad = torch.autograd.grad(tout, input)[0].data
-
-        sum = modules.Sum()
         relu = modules.ReLU()
-        out = sum.forward(relu.forward(self.input))
-        grad = relu.backward(sum.backward(out))
-        self.assertEqual(relu.activations, self.input)
+        relu.activations = self.input
+        grad = relu.backward(self.gradwrtout)
+        tgrad = self.torch_eval_f_backward(F.relu, self.gradwrtout)
         self.assertEqual(grad, tgrad)
 
     def test_tanh_forward(self):
@@ -62,13 +49,11 @@ class ModulesTest(unittest.TestCase):
         assert(torch.equal(out, tout))
 
     def test_tanh_backward(self):
-        tmodel = torch.nn.Tanh()
-        tout = tmodel.forward(self.input)
-
-        model = modules.Tanh()
-        out = model.forward(self.input)
-        assert(torch.equal(model.activations, self.input))
-        assert(torch.equal(out, tout))
+        tanh = modules.Tanh()
+        tanh.activations = self.input
+        grad = tanh.backward(self.gradwrtout)
+        tgrad = self.torch_eval_f_backward(F.tanh, self.gradwrtout)
+        self.assertEqual(grad, tgrad)
 
     def test_linear_forward(self):
         dims = (self.input_dims,10)
@@ -84,14 +69,22 @@ class ModulesTest(unittest.TestCase):
         assert(torch.equal(out, tout.data))
 
     def test_linear_backward(self):
-        dims = (self.input_dims,10)
-        tmodel = torch.nn.Linear(*dims)
-        #copy pytorch parameters initialization
-        tparams = tuple(p.data.clone() for p in tmodel.parameters())
-        tout = tmodel.f(torch.autograd.Variable(self.input))
+        gradwrtout = torch.randn(4, 10)
+        weights = torch.randn(10, self.input_dims)
+        bias = torch.randn(10)
+        model = modules.Linear(self.input_dims, 10)
+        model.params = (bias, weights)
+        model.activations = self.input
+        gradwrtin = model.backward(gradwrtout)
+        lin_f = lambda input: F.linear(input, Variable(weights, requires_grad=True), Variable(bias, requires_grad=True))
+        tgrad = self.torch_eval_f_backward(lin_f, gradwrtout)
+        self.assertEqual(gradwrtin, tgrad)
 
-        model = modules.Linear(*dims)
-        model.params = tparams
-        out = model.forward(self.input)
-        assert(torch.equal(model.activations, self.input))
-        assert(torch.equal(out, tout.data))
+    def _tensor_equal(self, x, y, msg):
+        def round(x):
+            return (x*1e6).round()
+
+        if not torch.equal(x, y):
+            if not torch.equal(round(x), round(y)):
+                m = "x!=y" if msg is None else msg
+                raise self.failureException(m)

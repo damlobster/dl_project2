@@ -32,7 +32,7 @@ class ReLU(Module):
         return output
 
     def backward(self, gradwrtoutput):
-        g_output = gradwrtoutput * self.activations.sign().sum(0)
+        g_output = (gradwrtoutput * (0.5 + 0.5*self.activations.sign())).sum(0)
         return g_output
 
 
@@ -46,7 +46,7 @@ class Tanh(Module):
         return output
 
     def backward(self, gradwrtoutput):
-        g_output = gradwrtoutput * (1 - self.activations.tanh()**2).sum(0)
+        g_output = (gradwrtoutput * (1 - self.activations.tanh()**2)).sum(0)
         return g_output
 
 
@@ -55,16 +55,17 @@ class Linear(Module):
         super(Linear, self).__init__()
         self.nb_units = output_dim
         self.input_dims = input_dim
-        self.params = (torch.FloatTensor(output_dim, input_dim).normal_(), torch.FloatTensor(output_dim).zero_())
-        self.gradients = tuple(torch.FloatTensor(p.size()).zero_() for p in self.params)
+        self.params = [torch.FloatTensor(output_dim, input_dim).normal_(), torch.FloatTensor(output_dim).zero_()]
+        self.gradients = list([torch.FloatTensor(p.size()).zero_() for p in self.params])
 
     def forward(self, input):
         self.activations = input
         return (input @ self.params[0].t()) + self.params[1]
 
     def backward(self, gradwrtoutput):
-        self.gradients[1] += gradwrtoutput
-        self.gradients[0] += gradwrtoutput*self.activations
+        self.gradients[1] += gradwrtoutput.sum(0)
+        g = gradwrtoutput.sum()*self.activations
+        self.gradients[0] += g.sum(0)
         g_output = gradwrtoutput*self.params[0]
         return g_output
 
