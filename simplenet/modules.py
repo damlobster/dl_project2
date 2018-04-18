@@ -1,80 +1,19 @@
-from torch import FloatTensor, LongTensor
+import torch
 import numpy as np
 
 
 class Module(object):
-
     def __init__(self):
         super(Module, self).__init__()
-        self.activations = None
         self.params = None
-
-    def forward(self , *input):
-        raise NotImplementedError
-
-    def backward(self, *gradwrtoutput):
-        raise NotImplementedError
-
-    def zero_grad(self):
-        if self.params is not None:
-            for p in self.params:
-                p.zero_()
+        self.gradients = None
+        self.activations = None
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
-    def param(self):
+    def get_params(self):
         return self.params
-
-
-class WithGrad(object):
-    gradients = dict()
-
-    def __init__(self):
-        super(WithGrad, self).__init__()
-        #self.gradients = None
-
-    def init_grad(self):
-        if WithGrad.gradients[self] is not None: return
-        if not isinstance(self, Module):
-            raise AttributeError(self.__class__.__name__+"() is not a Module")
-        if self.params() is None:
-            raise AttributeError(self.__class__.__name__+"() has no parameters")
-        WithGrad.gradients[self] = tuple(FloatTensor(p.size()[1:]).zero_() for p in self.params())
-
-    def zero_grad(self):
-        for g in WithGrad.gradients[self]:
-            g.zero_()
-
-    @staticmethod
-    def zero_all_grad():
-        for module in WithGrad.gradients.values():
-            module.zero_grad()
-
-    def cum_grad(self, grad):
-        for i in len(grad):
-            WithGrad.gradients[self][i].add_(grad[i])
-
-    def get_grad(self):
-        return WithGrad.gradients[self]
-
-
-class Functional(Module):
-
-    def __init__(self):
-        super(Functional, self).__init__()
-        self.previous = None
-        self.next = None
-
-    def __call__(self, *args, **kwargs):
-        return self.call(*args, **kwargs)
-
-    def call(self, *args, **kwargs):
-        previous = args[0]
-        previous.next = self
-        self.previous = previous
-        out = self.forward(*args[1:])
-        return out if type(out)!=tuple or len(out)>1 else out[0]
 
     def forward(self , *input):
         raise NotImplementedError
@@ -83,8 +22,57 @@ class Functional(Module):
         raise NotImplementedError
 
 
-class Sequential(Module):
+class ReLU(Module):
+    def __init__(self):
+        super(ReLU, self).__init__()
 
+    def forward(self, input):
+        self.activations = input
+        output = input.clamp(0, np.inf)
+        return output
+
+    def backward(self, gradwrtoutput):
+        g_output = gradwrtoutput * self.activations.sign().sum(0)
+        return g_output
+
+
+class Tanh(Module):
+    def __init__(self):
+        super(Tanh, self).__init__()
+
+    def forward(self, input):
+        self.activations = input
+        output = input.tanh()
+        return output
+
+    def backward(self, gradwrtoutput):
+        g_output = gradwrtoutput * (1 - self.activations.tanh()**2).sum(0)
+        return g_output
+
+
+class Linear(Module):
+    def __init__(self, input_dim, output_dim, weights_init='normal'):
+        super(Linear, self).__init__()
+        self.nb_units = output_dim
+        self.input_dims = input_dim
+        self.params = (torch.FloatTensor(output_dim, input_dim).normal_(), torch.FloatTensor(output_dim).zero_())
+        self.gradients = tuple(torch.FloatTensor(p.size()).zero_() for p in self.params)
+
+    def forward(self, input):
+        self.activations = input
+        return (input @ self.params[0].t()) + self.params[1]
+
+    def backward(self, gradwrtoutput):
+        self.gradients[1] += gradwrtoutput
+        self.gradients[0] += gradwrtoutput*self.activations
+        g_output = gradwrtoutput*self.params[0]
+        return g_output
+
+    def __repr__(self):
+        return "Linear({})".format(str(self.nb_units))
+
+
+class Sequential(Module):
     def __init__(self, *modules):
         super(Sequential, self).__init__()
         self.layers = modules
@@ -95,75 +83,9 @@ class Sequential(Module):
     def forward(self , *input):
         out = input
         for l in self.layers:
-            out = l.forward(out)
+            out = l(out)
 
         return out
 
     def backward(self, *gradwrtoutput):
         raise NotImplementedError
-
-
-
-class ReLU(Functional):
-
-    def __init__(self):
-        super(ReLU, self).__init__()
-
-    def forward(self, *inputs):
-        self.activations = inputs
-        outputs = tuple()
-        for inp in inputs:
-            outputs += (inp.clamp(0, np.inf),)
-        return outputs
-
-    def backward(self, *gradwrtoutput):
-        g_outputs = tuple()
-        for i, g_wrtoutput in enumerate(gradwrtoutput):
-            g_outputs += g_wrtoutput * self.activations[i].sign().sum(0)
-        return g_outputs
-
-
-class Tanh(Functional):
-
-    def __init__(self):
-        super(Tanh, self).__init__()
-
-    def forward(self, *inputs):
-        self.activations = inputs
-        outputs = tuple()
-        for inp in inputs:
-            outputs += (inp.tanh(),)
-        return outputs
-
-    def backward(self, *gradwrtoutput):
-        g_outputs = tuple()
-        for i, g_wrtoutput in enumerate(gradwrtoutput):
-            g_outputs += g_wrtoutput * (1 - self.activations[i].tanh()**2).sum(0)
-        return g_outputs
-
-
-class Linear(Functional, WithGrad):
-
-    def __init__(self, nb_units, input_dims=None):
-        super(Linear, self).__init__()
-        self.nb_units = nb_units
-        self.input_dims = input_dims
-        if input_dims is not None:
-            self.params = (FloatTensor(dim) for dim in input_dims)
-
-    def forward(self, *inputs):
-        if self.params is None:
-            self.input_dims = (inp.shape[1:] for inp in inputs)
-            self.params = tuple(FloatTensor(shape).normal_() for shape in self.input_dims)
-
-        self.activations = tuple(inp*self.params[i] for i, inp in enumerate(inputs))
-        return self.activations
-
-    def backward(self, *gradwrtoutput):
-        g_outputs = tuple()
-        for i, g_wrtoutput in enumerate(gradwrtoutput):
-            g_outputs += g_wrtoutput * (1 - self.activations[i].tanh()**2).sum(axis=0)
-        return g_outputs
-
-    def __repr__(self):
-        return "Linear({})".format(str(self.nb_units))
