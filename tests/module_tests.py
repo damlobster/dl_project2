@@ -1,12 +1,17 @@
 import unittest
 
 from simplenet.modules import *
-from simplenet import criterions
-import math
+from simplenet.criterions import MSELoss
+from simplenet.training import ModelTrainer
+from simplenet.optimizers import SGD
 
 import torch
 import torch.nn.functional as F
 from torch.autograd.variable import Variable
+
+from simplenet.training import compute_accuracy
+from tests.datasets_gen import generate_disk_dataset
+
 
 class ModulesTest(unittest.TestCase):
 
@@ -91,9 +96,9 @@ class ModulesTest(unittest.TestCase):
         input = torch.FloatTensor([[0, 0], [0, 1], [1, 0], [1, 1]])
         target = torch.FloatTensor([[-1], [1], [1], [-1]])
 
-        mt = criterions.ModelTrainer(model, criterions.MSELoss())
+        mt = ModelTrainer(model, MSELoss())
 
-        mt.fit(input, target, criterions.SGD(lr=0.1), epochs=250, batch_size=1, verbose=0)
+        mt.fit(input, target, SGD(lr=0.1), epochs=250, batch_size=1, verbose=0)
 
         y_hat = mt.predict(input)
         assert((y_hat.sign()).float().equal(target))
@@ -108,36 +113,11 @@ class ModulesTest(unittest.TestCase):
 
         train_input, train_target, test_input, test_target = generate_disk_dataset()
 
-        mt = criterions.ModelTrainer(model, criterions.MSELoss())
+        mt = ModelTrainer(model, MSELoss())
 
-        mt.fit(train_input, train_target, criterions.SGD(lr=0.01), epochs=250, batch_size=100, verbose=0)
+        mt.fit(train_input, train_target, SGD(lr=0.01), epochs=250, batch_size=100, verbose=0)
 
         y_hat = mt.predict(test_input)
         acc = compute_accuracy(test_target, y_hat)
         print("test accuracy=", acc)
         assert(acc > 0.95)
-
-def compute_accuracy(target, y_hat):
-    nb_correct = 0
-    y = torch.sign(y_hat)
-    for i in range(target.shape[0]):
-        nb_correct += 1 if target[i].equal(y[i]) else 0
-
-    return nb_correct / target.shape[0]
-
-def generate_disc_set(nb):
-    input = torch.Tensor(nb, 2).uniform_(-1, 1)
-    target = input.pow(2).sum(1).sub(2 / math.pi).sign().float().view(-1, 1)
-
-    return input, target
-
-def generate_disk_dataset():
-    train_input, train_target = generate_disc_set(1000)
-    test_input, test_target = generate_disc_set(1000)
-
-    mean, std = train_input.mean(), train_input.std()
-
-    train_input.sub_(mean).div_(std)
-    test_input.sub_(mean).div_(std)
-
-    return train_input, train_target, test_input, test_target
