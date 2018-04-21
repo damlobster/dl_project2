@@ -1,11 +1,14 @@
 import torch
 import numpy as np
-
+#from .debug import log
+import math
 
 class Parameter(object):
-    def __init__(self, init_tensor):
+    def __init__(self, init_tensor, name=None):
         self.data = init_tensor
+        self.name = name
         self.grad = torch.zeros(init_tensor.shape)
+        self.last_grad = torch.zeros(init_tensor.shape)
 
     def zero_grad(self):
         self.grad.zero_()
@@ -13,6 +16,8 @@ class Parameter(object):
     def add_grad(self, grad_tensor):
         self.grad.add_(grad_tensor)
 
+    def __repr__(self):
+        return "{}: data {} grad {}".format(self.name, self.data)
 
 class Module(object):
     def __init__(self):
@@ -25,7 +30,12 @@ class Module(object):
         return self.__class__.__name__ + "()"
 
     def get_params(self):
-        return self.params
+        return self.params if self.params is None or isinstance(self.params, Parameter) else list(self.params.values())
+
+    def zero_grads(self):
+        if self.get_params() is not None:
+            for p in self.get_params():
+                p.zero_grad()
 
     def forward(self, *input):
         raise NotImplementedError
@@ -44,7 +54,7 @@ class ReLU(Module):
         return output
 
     def backward(self, gradwrtoutput):
-        g_output = (gradwrtoutput * self.outputs.sign()).sum(0)
+        g_output = (gradwrtoutput * self.outputs.sign())
         return g_output
 
 
@@ -57,7 +67,7 @@ class Tanh(Module):
         return self.outputs
 
     def backward(self, gradwrtoutput):
-        g_output = (gradwrtoutput * (1 - self.outputs**2)).sum(0)
+        g_output = (gradwrtoutput * (1 - self.outputs**2))
         return g_output
 
 
@@ -66,9 +76,12 @@ class Linear(Module):
         super(Linear, self).__init__()
         self.nb_units = output_dim
         self.input_dims = input_dim
+        std = math.sqrt(2.0 / (output_dim + input_dim))
+        ws = torch.zeros(output_dim, input_dim).normal_(0, std) if w_init is None else w_init
+        bs = torch.zeros(output_dim).uniform_(-std, std) if b_init is None else b_init
         self.params = {
-            'w': Parameter(torch.randn(output_dim, input_dim) if w_init is None else w_init),
-            'b': Parameter(torch.zeros(output_dim) if b_init is None else b_init)
+            'w': Parameter(ws, name=self.__repr__() + " w"),
+            'b': Parameter(bs,  name=self.__repr__() + " b")
         }
 
     def forward(self, input):
@@ -79,10 +92,10 @@ class Linear(Module):
         self.params['b'].add_grad(gradwrtoutput.sum(0))
         self.params['w'].add_grad(self.activations.t()@gradwrtoutput)
         g_output = gradwrtoutput@self.params['w'].data
-        return g_output.sum(0)
+        return g_output
 
     def __repr__(self):
-        return "Linear({})".format(str(self.nb_units))
+        return "Linear({}, {})".format(str(self.input_dims), str(self.nb_units))
 
 
 class Sequential(Module):
@@ -94,11 +107,25 @@ class Sequential(Module):
         return "Sequential(\n  {})".format(",\n  ".join(self.layers))
 
     def forward(self , *input):
-        out = input
+        out = input[0]
         for l in self.layers:
-            out = l(out)
-
+            out = l.forward(out)
         return out
 
     def backward(self, *gradwrtoutput):
-        raise NotImplementedError
+        gradout = gradwrtoutput[0]
+        for l in reversed(self.layers):
+            gradout = l.backward(gradout)
+        return gradout
+
+    def zero_grads(self):
+        for m in self.layers:
+            m.zero_grads()
+
+    def get_params(self):
+        params = []
+        for m in self.layers:
+            p = m.get_params()
+            if p is not None:
+                params += p
+        return params
