@@ -1,50 +1,66 @@
 import torch
 import numpy as np
-#from .debug import log
 import math
 
 class Parameter(object):
+    r"""Hold the data and gradient tensor for a parameter of a module"""
     def __init__(self, init_tensor, name=None):
         self.data = init_tensor
         self.name = name
         self.grad = torch.zeros(init_tensor.shape)
-        self.last_grad = torch.zeros(init_tensor.shape)
 
     def zero_grad(self):
+        """Reset the accumulated gradients"""
         self.grad.zero_()
 
     def add_grad(self, grad_tensor):
+        """Add the gradient of a batch"""
+        if self.grad.shape != grad_tensor.shape:
+            raise ValueError(self.grad.shape, grad_tensor.shape)
         self.grad.add_(grad_tensor)
 
+    def cuda(self):
+        """Transfert the tensors to the cuda device"""
+        self.data = self.data.cuda()
+        self.grad = self.grad.cuda()
+
     def __repr__(self):
-        return "{}: data {} grad {}".format(self.name, self.data)
+        return "{}: data shape {}".format(self.name, self.data.shape)
+
 
 class Module(object):
+    """Base class for a module."""
     def __init__(self):
         super(Module, self).__init__()
-        self.params = None
+        self.params = {}
         self.activations = None
         self.outputs = None
+
+    def parameters(self):
+        """Return the parameters list of the module"""
+        return [] if len(self.params) == 0 else list(self.params.values())
+
+    def cuda(self):
+        self.params.cuda()
+
+    def forward(self, *input):
+        """Do the forward pass of backprop algo. Subclasses must implement this method.
+        :argument *input the input tensor(s)
+        :return the output tensor(s)"""
+        raise NotImplementedError
+
+    def backward(self, *gradwrtoutput):
+        """Do the backward pass of backprop algo. Subclasses must implement this method.
+        :argument *gradwrtoutput tensor(s) containing the gradient(s) wrt the output of this module
+        :return tensor(s) containing the gradient wrt the input(s) of this module"""
+        raise NotImplementedError
 
     def __repr__(self):
         return self.__class__.__name__ + "()"
 
-    def get_params(self):
-        return self.params if self.params is None or isinstance(self.params, Parameter) else list(self.params.values())
-
-    def zero_grads(self):
-        if self.get_params() is not None:
-            for p in self.get_params():
-                p.zero_grad()
-
-    def forward(self, *input):
-        raise NotImplementedError
-
-    def backward(self, *gradwrtoutput):
-        raise NotImplementedError
-
 
 class ReLU(Module):
+    """ReLU module"""
     def __init__(self):
         super(ReLU, self).__init__()
 
@@ -59,6 +75,7 @@ class ReLU(Module):
 
 
 class Tanh(Module):
+    """Tanh module"""
     def __init__(self):
         super(Tanh, self).__init__()
 
@@ -72,6 +89,12 @@ class Tanh(Module):
 
 
 class Linear(Module):
+    """Linear (dense) module.
+    :argument input_dim must match the dimension of the input tensor
+    :argument output_dim the number of units (neurons) of the layer
+    :argument w_init a tensor of size(input_dim, output_dim) containing the initialization of the weights,
+                if None, the weights are initilialized according Xavier method
+    :argument b_init a tensor of size(output_dim) if None --> init according Xavier method"""
     def __init__(self, input_dim, output_dim, w_init=None, b_init=None):
         super(Linear, self).__init__()
         self.nb_units = output_dim
@@ -90,7 +113,7 @@ class Linear(Module):
 
     def backward(self, gradwrtoutput):
         self.params['b'].add_grad(gradwrtoutput.sum(0))
-        self.params['w'].add_grad(self.activations.t()@gradwrtoutput)
+        self.params['w'].add_grad(gradwrtoutput.t()@self.activations)
         g_output = gradwrtoutput@self.params['w'].data
         return g_output
 
@@ -99,6 +122,15 @@ class Linear(Module):
 
 
 class Sequential(Module):
+    """Sequential module.
+    Usage:
+        model = Sequential(
+            Linear(2, 128),
+            ReLU(),
+            Linear(128, 1),
+            Tanh()
+        )
+    """
     def __init__(self, *modules):
         super(Sequential, self).__init__()
         self.layers = modules
@@ -107,25 +139,24 @@ class Sequential(Module):
         return "Sequential(\n  {})".format(",\n  ".join(self.layers))
 
     def forward(self , *input):
+        """Do the chain of forward calls on all children modules"""
         out = input[0]
         for l in self.layers:
             out = l.forward(out)
         return out
 
     def backward(self, *gradwrtoutput):
+        """Do the chain of backward calls on all children modules"""
         gradout = gradwrtoutput[0]
         for l in reversed(self.layers):
             gradout = l.backward(gradout)
         return gradout
 
-    def zero_grads(self):
-        for m in self.layers:
-            m.zero_grads()
-
-    def get_params(self):
+    def parameters(self):
+        """Return the paramters of all children modules"""
         params = []
         for m in self.layers:
-            p = m.get_params()
+            p = m.parameters()
             if p is not None:
                 params += p
         return params

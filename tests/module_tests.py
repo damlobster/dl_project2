@@ -9,8 +9,7 @@ import torch
 import torch.nn.functional as F
 from torch.autograd.variable import Variable
 
-from simplenet.training import compute_accuracy
-from tests.datasets_gen import generate_disk_dataset
+from datasets_gen import generate_disk_dataset
 
 
 class ModulesTest(unittest.TestCase):
@@ -86,23 +85,6 @@ class ModulesTest(unittest.TestCase):
         assert(torch.equal(gradwrtin.sum(0), tgrad))
 
 
-    def test_sequential_forward(self):
-        model = Sequential(
-            Linear(2, 4),
-            Tanh(),
-            Linear(4, 1),
-            Tanh()
-        )
-        input = torch.FloatTensor([[0, 0], [0, 1], [1, 0], [1, 1]])
-        target = torch.FloatTensor([[-1], [1], [1], [-1]])
-
-        mt = ModelTrainer(model, MSELoss())
-
-        mt.fit(input, target, SGD(lr=0.1), epochs=250, batch_size=1, verbose=0)
-
-        y_hat = mt.predict(input)
-        assert((y_hat.sign()).float().equal(target))
-
     def test_disk_shallow(self):
         model = Sequential(
             Linear(2, 128),
@@ -113,11 +95,54 @@ class ModulesTest(unittest.TestCase):
 
         train_input, train_target, test_input, test_target = generate_disk_dataset()
 
-        mt = ModelTrainer(model, MSELoss())
+        mt = ModelTrainer(model, MSELoss(), SGD(model.parameters(), lr=0.01))
 
-        mt.fit(train_input, train_target, SGD(lr=0.01), epochs=250, batch_size=100, verbose=0)
+        mt.fit((train_input, train_target), epochs=250, batch_size=100, verbose=0)
 
         y_hat = mt.predict(test_input)
         acc = compute_accuracy(test_target, y_hat)
         print("test accuracy=", acc)
         assert(acc > 0.95)
+
+    def test_model_trainer(self):
+        model = Sequential(
+            Linear(2, 128),
+            ReLU(),
+            Linear(128, 1),
+            Tanh()
+        )
+
+        train_input, train_target, test_input, test_target = generate_disk_dataset()
+
+        mt = ModelTrainer(model, MSELoss(), SGD(model.parameters(), lr=0.01), y_hat_fun=torch.sign)
+
+        mt.fit((train_input, train_target), (test_input, test_target), epochs=25, batch_size=100, verbose=0)
+
+        # pytorch test
+        from torch import nn, optim, autograd
+        model = nn.Sequential(
+            nn.Linear(2, 128),
+            nn.ReLU(),
+            nn.Linear(128, 1),
+            nn.Tanh()
+        )
+
+        train_input, train_target, test_input, test_target = generate_disk_dataset()
+        train_input = autograd.Variable(train_input)
+        train_target = autograd.Variable(train_target)
+        test_input = autograd.Variable(test_input)
+        test_target = autograd.Variable(test_target)
+
+        mt = ModelTrainer(model, nn.MSELoss(), optim.SGD(model.parameters(), lr=0.01),
+                          y_hat_fun=torch.sign, pytorch_model=True)
+
+        mt.fit((train_input, train_target), (test_input, test_target), epochs=25, batch_size=100, verbose=0)
+
+
+def compute_accuracy(target, y_hat):
+    nb_correct = 0
+    y = torch.sign(y_hat)
+    for i in range(target.shape[0]):
+        nb_correct += 1 if target[i].equal(y[i]) else 0
+
+    return nb_correct / target.shape[0]
