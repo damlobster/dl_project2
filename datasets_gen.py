@@ -1,9 +1,9 @@
 import math
 import torch
 
-def generate_disk_dataset():
-    train_input, train_target = _generate_disc_set(1000)
-    test_input, test_target = _generate_disc_set(1000)
+def generate_disk_dataset(samples_train=1000, sample_test=1000):
+    train_input, train_target = _generate_disc_set(samples_train)
+    test_input, test_target = _generate_disc_set(sample_test)
 
     mean, std = train_input.mean(), train_input.std()
 

@@ -28,7 +28,7 @@ class ModulesTest(unittest.TestCase):
         return grad
 
     def test_relu_forward(self):
-        tout = F.relu(self.input)
+        tout = F.relu(torch.autograd.Variable(self.input))
 
         model = ReLU()
         out = model.forward(self.input)

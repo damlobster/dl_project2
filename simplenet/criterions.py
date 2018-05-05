@@ -29,4 +29,4 @@ class MSELoss(Criterion):
         return ((y_hat-target)**2).mean()
 
     def backward(self):
-        return 2.0*(self.y_hat-self.target)
+        return (2.0/self.target.shape[0])*(self.y_hat-self.target)

@@ -1,5 +1,4 @@
 import torch
-import numpy as np
 import math
 
 class Parameter(object):
@@ -29,7 +28,8 @@ class Parameter(object):
 
 
 class Module(object):
-    """Base class for a module."""
+    """Base class for a module.
+    """
     def __init__(self):
         super(Module, self).__init__()
         self.params = {}
@@ -66,7 +66,7 @@ class ReLU(Module):
         super(ReLU, self).__init__()
 
     def forward(self, input):
-        output = input.clamp(0, np.inf)
+        output = input.clamp(min=0)
         self.outputs = output
         return output
 
@@ -100,22 +100,29 @@ class Linear(Module):
         super(Linear, self).__init__()
         self.nb_units = output_dim
         self.input_dims = input_dim
+
         std = math.sqrt(2.0 / (output_dim + input_dim))
+
         ws = torch.zeros(output_dim, input_dim).normal_(0, std) if w_init is None else w_init
+        self.weights = Parameter(ws, name=self.__repr__() + " w")
+
         bs = torch.zeros(output_dim).uniform_(-std, std) if b_init is None else b_init
+        self.bias = Parameter(bs, name=self.__repr__() + " b")
+
         self.params = {
-            'w': Parameter(ws, name=self.__repr__() + " w"),
-            'b': Parameter(bs,  name=self.__repr__() + " b")
+            'w': self.weights,
+            'b': self.bias
         }
 
     def forward(self, input):
         self.activations = input
-        return (input @ self.params['w'].data.t()) + self.params['b'].data
+        out = (input @ self.weights.data.t()) + self.bias.data
+        return out
 
     def backward(self, gradwrtoutput):
-        self.params['b'].add_grad(gradwrtoutput.sum(0))
-        self.params['w'].add_grad(gradwrtoutput.t()@self.activations)
-        g_output = gradwrtoutput@self.params['w'].data
+        self.bias.add_grad(gradwrtoutput.sum(0))
+        self.weights.add_grad(gradwrtoutput.t() @ self.activations)
+        g_output = gradwrtoutput @ self.weights.data
         return g_output
 
     def __repr__(self):

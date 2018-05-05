@@ -14,8 +14,9 @@ def main():
         modules.Tanh()
     )
 
-    train_input, train_target, test_input, test_target = generate_disk_dataset()
-    mt = ModelTrainer(model, criterions.MSELoss(), optimizers.SGD(model.parameters(), lr=0.0001), y_hat_fun=torch.sign)
+    train_input, train_target, test_input, test_target = generate_disk_dataset(1000, 1000)
+    mt = ModelTrainer(model, criterions.MSELoss(), optimizers.SGD(model.parameters(), lr=0.01),
+                      y_hat_fun=torch.sign)
 
     print("\n                     Train SimpleNet model on toy dataset")
     mt.fit((train_input, train_target), (test_input, test_target), epochs=250, batch_size=100, verbose=10)
@@ -32,7 +33,6 @@ def main():
         nn.Tanh()
     )
 
-    train_input, train_target, test_input, test_target = generate_disk_dataset()
     train_input = autograd.Variable(train_input)
     train_target = autograd.Variable(train_target)
     test_input = autograd.Variable(test_input)

@@ -78,7 +78,7 @@ class ModelTrainer(object):
                 else:
                     train_correct += (self.y_hat_fun(y_hat) == y_train[batch]).sum()
 
-                train_loss += loss
+                train_loss += loss/len(idxs)
 
             val_loss = np.nan
             val_acc = np.nan
@@ -91,24 +91,24 @@ class ModelTrainer(object):
                 x_test, y_test = validation_data
                 y_hat = self.model.forward(x_test)
                 if self.pytorch_model:
-                    val_loss = self.criterion(*self.criterion_fun(y_hat, y_test)).data[0]/len(x_test)
-                    val_acc = (self.y_hat_fun(y_hat).data==y_test.data).float().sum()/len(x_test)
+                    val_loss = self.criterion(*self.criterion_fun(y_hat, y_test)).data[0]
+                    val_acc = (self.y_hat_fun(y_hat).data==y_test.data).float().sum()/x_test.size()[0]
                 else:
-                    val_loss = self.criterion.forward(*self.criterion_fun(y_hat, y_test))/len(x_test)
-                    val_acc = (self.y_hat_fun(y_hat)==y_test).float().sum()/len(x_test)
+                    val_loss = self.criterion.forward(*self.criterion_fun(y_hat, y_test))
+                    val_acc = (self.y_hat_fun(y_hat)==y_test).float().sum()/x_test.size()[0]
 
 
 
             if self.pytorch_model:
                 self.history.add([
-                    train_loss.data[0]/x_train.size()[0],
+                    train_loss.data[0],
                     train_correct/x_train.size()[0],
                     val_loss,
                     val_acc
                 ])
             else:
                 self.history.add([
-                    train_loss/x_train.shape[0],
+                    train_loss,
                     train_correct/x_train.shape[0],
                     val_loss,
                     val_acc
