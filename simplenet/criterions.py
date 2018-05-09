@@ -7,7 +7,7 @@ class Criterion(object):
 
     def cuda(self):
         # for pytorch api compatibility
-        return
+        return self
 
     def forward(self, y_hat, target):
         """Compute the loss"""

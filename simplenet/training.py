@@ -44,7 +44,7 @@ class ModelTrainer(object):
         N = x_train.data.shape[0] if self.pytorch_model else x_train.shape[0]
 
         if x_train.is_cuda:
-            self.model = self.model.cuda()
+            self.model.cuda()
             self.criterion = self.criterion.cuda()
 
         if self.pytorch_model:

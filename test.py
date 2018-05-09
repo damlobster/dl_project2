@@ -1,10 +1,14 @@
+import matplotlib
+# needed to run this script on a server without GUI
+matplotlib.use('Agg') 
+
 import torch
 from simplenet import modules, criterions, optimizers
 from datasets_gen import generate_disk_dataset
 from simplenet.training import ModelTrainer
 
-
 def main():
+    # train on GPU if any available
     cuda = torch.cuda.is_available()
 
     #**************************************************************************************
@@ -15,17 +19,15 @@ def main():
         modules.Linear(128, 1),
         modules.Tanh()
     )
-
     if cuda:
         model.cuda()
-
-    print(model)
 
     train_input, train_target, test_input, test_target = generate_disk_dataset(1000, 1000, cuda)
     mt = ModelTrainer(model, criterions.MSELoss(), optimizers.SGD(model.parameters(), lr=0.01),
                       y_hat_fun=torch.sign)
 
-    print("\n                     Train SimpleNet model on toy dataset")
+    print("\n### Train SimpleNet model on toy dataset ###")
+    print(model, "\n")
     mt.fit((train_input, train_target), (test_input, test_target), epochs=250, batch_size=100, verbose=10)
 
     mt.plot_training("SimpleNet learning curves", avg_w_size=5, filename="simplenet_learning_curves.png")
@@ -39,7 +41,9 @@ def main():
         nn.Linear(128, 1),
         nn.Tanh()
     )
-
+    if cuda:
+        model.cuda()
+    
     train_input = autograd.Variable(train_input)
     train_target = autograd.Variable(train_target)
     test_input = autograd.Variable(test_input)
@@ -48,7 +52,8 @@ def main():
     mt = ModelTrainer(model, nn.MSELoss(), optim.SGD(model.parameters(), lr=0.01),
                       y_hat_fun=torch.sign, pytorch_model=True)
 
-    print("\n\n                      Training PyTorch model on toy dataset")
+    print("\n\n### Training PyTorch model on toy dataset ###")
+    print(model, "\n")
     mt.fit((train_input, train_target), (test_input, test_target), epochs=250, batch_size=100, verbose=10)
 
     mt.plot_training("PyTorch learning curves", avg_w_size=5, filename="pytorch_learning_curves.png")

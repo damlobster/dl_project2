@@ -41,7 +41,7 @@ class Module(object):
         return [] if len(self.params) == 0 else list(self.params.values())
 
     def cuda(self):
-        for p in self.params.values():
+        for p in self.parameters():
             p.cuda()
 
     def forward(self, *input):
@@ -104,25 +104,20 @@ class Linear(Module):
         std = math.sqrt(2.0 / (output_dim + input_dim))
 
         ws = torch.zeros(output_dim, input_dim).normal_(0, std) if w_init is None else w_init
-        self.weights = Parameter(ws, name=self.__repr__() + " w")
+        self.params['w'] = Parameter(ws, name=self.__repr__() + " w")
 
         bs = torch.zeros(output_dim).uniform_(-std, std) if b_init is None else b_init
-        self.bias = Parameter(bs, name=self.__repr__() + " b")
-
-        self.params = {
-            'w': self.weights,
-            'b': self.bias
-        }
+        self.params['b'] = Parameter(bs, name=self.__repr__() + " b")
 
     def forward(self, input):
         self.activations = input
-        out = (input @ self.weights.data.t()) + self.bias.data
+        out = (input @ self.params['w'].data.t()) + self.params['b'].data
         return out
 
     def backward(self, gradwrtoutput):
-        self.bias.add_grad(gradwrtoutput.sum(0))
-        self.weights.add_grad(gradwrtoutput.t() @ self.activations)
-        g_output = gradwrtoutput @ self.weights.data
+        self.params['b'].add_grad(gradwrtoutput.sum(0))
+        self.params['w'].add_grad(gradwrtoutput.t() @ self.activations)
+        g_output = gradwrtoutput @ self.params['w'].data
         return g_output
 
     def __repr__(self):
@@ -159,7 +154,7 @@ class Sequential(Module):
         for l in reversed(self.layers):
             gradout = l.backward(gradout)
         return gradout
-
+            
     def parameters(self):
         """Return the paramters of all children modules"""
         params = []
