@@ -126,7 +126,7 @@ class Linear(Module):
         return g_output
 
     def __repr__(self):
-        return "Linear({}, {})".format(str(self.input_dims), str(self.nb_units))
+        return "Linear({}, {})".format(self.input_dims, self.nb_units)
 
 
 class Sequential(Module):
@@ -144,7 +144,7 @@ class Sequential(Module):
         self.layers = modules
 
     def __repr__(self):
-        return "Sequential(\n  {})".format(",\n  ".join(self.layers))
+        return "Sequential(\n  {})".format(",\n  ".join([str(l) for l in self.layers]))
 
     def forward(self , *input):
         """Do the chain of forward calls on all children modules"""

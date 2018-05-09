@@ -5,7 +5,7 @@ from simplenet.training import ModelTrainer
 
 
 def main():
-    cuda = False
+    cuda = torch.cuda.is_available()
 
     #**************************************************************************************
     # SimpleNet: our implementation
@@ -15,6 +15,11 @@ def main():
         modules.Linear(128, 1),
         modules.Tanh()
     )
+
+    if cuda:
+        model.cuda()
+
+    print(model)
 
     train_input, train_target, test_input, test_target = generate_disk_dataset(1000, 1000, cuda)
     mt = ModelTrainer(model, criterions.MSELoss(), optimizers.SGD(model.parameters(), lr=0.01),
