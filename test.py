@@ -5,6 +5,8 @@ from simplenet.training import ModelTrainer
 
 
 def main():
+    cuda = False
+
     #**************************************************************************************
     # SimpleNet: our implementation
     model = modules.Sequential(
@@ -14,7 +16,7 @@ def main():
         modules.Tanh()
     )
 
-    train_input, train_target, test_input, test_target = generate_disk_dataset(1000, 1000)
+    train_input, train_target, test_input, test_target = generate_disk_dataset(1000, 1000, cuda)
     mt = ModelTrainer(model, criterions.MSELoss(), optimizers.SGD(model.parameters(), lr=0.01),
                       y_hat_fun=torch.sign)
 

@@ -1,7 +1,8 @@
 import math
 import torch
 
-def generate_disk_dataset(samples_train=1000, sample_test=1000):
+
+def generate_disk_dataset(samples_train=1000, sample_test=1000, cuda=False):
     train_input, train_target = _generate_disc_set(samples_train)
     test_input, test_target = _generate_disc_set(sample_test)
 
@@ -10,7 +11,12 @@ def generate_disk_dataset(samples_train=1000, sample_test=1000):
     train_input.sub_(mean).div_(std)
     test_input.sub_(mean).div_(std)
 
+    if cuda:
+        train_input, train_target = train_input.cuda(), train_target.cuda()
+        test_input, test_target = test_input.cuda(), test_target.cuda()
+
     return train_input, train_target, test_input, test_target
+
 
 def _generate_disc_set(nb):
     input = torch.Tensor(nb, 2).uniform_(-1, 1)
