@@ -2,7 +2,7 @@ import torch
 import math
 
 class Parameter(object):
-    r"""Hold the data and gradient tensor for a parameter of a module"""
+    """Class holding the data and gradient tensor for a parameter of a module"""
     def __init__(self, init_tensor, name=None):
         self.data = init_tensor
         self.name = name
@@ -13,7 +13,7 @@ class Parameter(object):
         self.grad.zero_()
 
     def add_grad(self, grad_tensor):
-        """Add the gradient of a batch"""
+        """Accumulate the gradients of a batch"""
         if self.grad.shape != grad_tensor.shape:
             raise ValueError(self.grad.shape, grad_tensor.shape)
         self.grad.add_(grad_tensor)
@@ -72,6 +72,7 @@ class ReLU(Module):
 
     def backward(self, gradwrtoutput):
         g_output = (gradwrtoutput * self.outputs.sign())
+        self.outputs = None
         return g_output
 
 
@@ -117,6 +118,7 @@ class Linear(Module):
     def backward(self, gradwrtoutput):
         self.params['b'].add_grad(gradwrtoutput.sum(0))
         self.params['w'].add_grad(gradwrtoutput.t() @ self.activations)
+        self.activations = None
         g_output = gradwrtoutput @ self.params['w'].data
         return g_output
 

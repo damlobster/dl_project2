@@ -74,6 +74,9 @@ def main(m, samples, batch_size, units):
 
 
 if __name__ == "__main__":
+    if len(sys.argv)==1:
+        print("Optional arguments: sn(SimpleNet)/pt(PyTorch) nb_samples batch_size nb_units")
+        print("runned with: sn+pt 1000 100 128")
     model = sys.argv[1] if len(sys.argv) >= 2 else None
     samples = int(sys.argv[2]) if len(sys.argv) >= 3 else 1000
     batch_size = int(sys.argv[3]) if len(sys.argv) == 4 else 100

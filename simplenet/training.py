@@ -47,10 +47,9 @@ class ModelTrainer(object):
             self.model.cuda()
             self.criterion = self.criterion.cuda()
 
-        if self.pytorch_model:
-            self.model.train(True)
-
         for epoch in range(epochs):
+            if self.pytorch_model:
+                self.model.train(True)
 
             idxs = torch.randperm(N)
             if(x_train.is_cuda):

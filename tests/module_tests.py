@@ -70,7 +70,7 @@ class ModulesTest(unittest.TestCase):
         assert(torch.equal(model.activations, self.input))
         assert(torch.equal(out, tout.data))
 
-    def test_linear_backward_xor(self):
+    def test_linear_backward(self):
         gradwrtout = torch.randn(self.n, 10)
         weights = torch.randn(10, self.input_dims)
         bias = torch.randn(10)
@@ -82,7 +82,10 @@ class ModulesTest(unittest.TestCase):
         bs = Variable(bias, requires_grad=True)
         lin_f = lambda input: F.linear(input, ws, bs)
         tgrad = self.torch_eval_f_backward(lin_f, gradwrtout)
+
         assert(torch.equal(gradwrtin.sum(0), tgrad))
+        assert (torch.equal(model.params['w'].grad, ws.grad.data))
+        assert (torch.equal(model.params['b'].grad, bs.grad.data))
 
 
     def test_disk_shallow(self):
