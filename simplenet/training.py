@@ -47,31 +47,38 @@ class ModelTrainer(object):
             self.model.cuda()
             self.criterion = self.criterion.cuda()
 
+        # epochs main training loop
         for epoch in range(epochs):
             if self.pytorch_model:
                 self.model.train(True)
 
+            # training set shuffling
             idxs = torch.randperm(N)
             if(x_train.is_cuda):
                 idxs = idxs.cuda()
             idxs = [idxs] if batch_size is None else idxs.split(batch_size)
 
+            # batches training loop
             train_correct = 0
             train_loss = 0
             for batch in idxs:
                 self.optimizer.zero_grad()
 
+                # forward pass
                 y_hat = self.model.forward(x_train[batch])
                 loss = self.criterion.forward(*self.criterion_fun(y_hat, y_train[batch]))
 
+                #backprop errors
                 if self.pytorch_model:
                     loss.backward()
                 else:
                     gradwrtloss = self.criterion.backward()
                     self.model.backward(gradwrtloss)
 
+                # update gradients
                 self.optimizer.step()
 
+                # compute training loss and accuracy
                 if self.pytorch_model:
                     train_correct += (self.y_hat_fun(y_hat) == y_train[batch]).sum().data[0]
                 else:
@@ -79,9 +86,9 @@ class ModelTrainer(object):
 
                 train_loss += loss/len(idxs)
 
+            # compute epoch validation loss and accuracy
             val_loss = np.nan
             val_acc = np.nan
-
             if validation_data is not None:
                 #Disable training mode
                 if self.pytorch_model:
@@ -96,8 +103,7 @@ class ModelTrainer(object):
                     val_loss = self.criterion.forward(*self.criterion_fun(y_hat, y_test))
                     val_acc = (self.y_hat_fun(y_hat)==y_test).float().sum()/x_test.size()[0]
 
-
-
+            # save epoch to history
             if self.pytorch_model:
                 self.history.add([
                     train_loss.data[0],
